@@ -10,37 +10,37 @@ import {ICurveFi, ICrvV3} from "../interfaces/curve.sol";
 import {IUniswapV2Router02} from "../interfaces/uniswap.sol";
 import {StrategyProxy} from "../interfaces/yearn.sol";
 
-contract StrategyCurveEcrv is BaseStrategy {
+contract StrategyCurveIBVoterProxy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    address public constant gauge = address(0x3C0FFFF15EA30C35d7A85B85c0782D6c94e1d238);
+    address public constant gauge = address(0xF5194c3325202F456c95c1Cf0cA36f8475C1949F);
 
     address private uniswapRouter = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
     address private sushiswapRouter = 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F;
 
-    address public crvRouter = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
-    address[] public crvPathWeth;
+    address public crvRouter = 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F;
+    address[] public crvPathDai;
 
-    ICurveFi public curveStableSwap = ICurveFi(address(0xc5424B857f758E906013F3555Dad202e4bdB4567)); // Curve ETH/sETH StableSwap pool contract
+    ICurveFi public curveStableSwap = ICurveFi(address(0x2dded6Da1BF5DBdF597C45fcFaa3194e53EcfeAF)); // Curve Iron Bank StableSwap pool contract
     StrategyProxy public proxy = StrategyProxy(address(0x9a3a03C614dc467ACC3e81275468e033c98d960E));
 
-    IERC20 public weth = IERC20(address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
-    IERC20 public sEth = IERC20(address(0x5e74C9036fb86BD7eCdcb084a0673EFc32eA31cb));
+// Tokens used in this strategy
+    IERC20 public dai = IERC20(address(0x6B175474E89094C44Da98b954EedeAC495271d0F));
     ICrvV3 public crv = ICrvV3(address(0xD533a949740bb3306d119CC777fa900bA034cd52));
 
     constructor(address _vault) public BaseStrategy(_vault) {
         want.safeApprove(address(proxy), uint256(-1));
         crv.approve(crvRouter, uint256(-1));
 
-        crvPathWeth = new address[](2);
-        crvPathWeth[0] = address(crv);
-        crvPathWeth[1] = address(weth);
+        crvPathDai = new address[](2);
+        crvPathDai[0] = address(crv);
+        crvPathDai[1] = address(dai);
     }
 
     function name() external view override returns (string memory) {
-        return "StrategyCurveEcrvVoterProxy";
+        return "StrategyCurveIBVoterProxy";
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
@@ -66,12 +66,7 @@ contract StrategyCurveEcrv is BaseStrategy {
 
             uint256 crvBalance = crv.balanceOf(address(this));
             if (crvBalance > 0) {
-                IUniswapV2Router02(crvRouter).swapExactTokensForETH(crvBalance, uint256(0), crvPathWeth, address(this), now);
-            }
-
-            uint256 ethBalance = address(this).balance;
-            if (ethBalance > 0) {
-                curveStableSwap.add_liquidity{value: ethBalance}([ethBalance, 0], 0);
+                IUniswapV2Router02(crvRouter).swapExactTokensForTokens(crvBalance, uint256(0), crvPathDai, address(this), now);
             }
 
             _profit = want.balanceOf(address(this));
@@ -122,13 +117,13 @@ contract StrategyCurveEcrv is BaseStrategy {
     //
     // helper functions
     //
-    function setCRVRouter(bool isUniswap, address[] calldata _wethPath) public onlyGovernance {
-        if (isUniswap) {
-            crvRouter = uniswapRouter;
-        } else {
+    function setCRVRouter(bool isSushiswap, address[] calldata _daiPath) public onlyGovernance {
+        if (isSushiswap) {
             crvRouter = sushiswapRouter;
+        } else {
+            crvRouter = uniswapRouter;
         }
-        crvPathWeth = _wethPath;
+        crvPathDai = _daiPath;
         crv.approve(crvRouter, uint256(-1));
     }
 
@@ -136,6 +131,4 @@ contract StrategyCurveEcrv is BaseStrategy {
         proxy = StrategyProxy(_proxy);
     }
 
-    // enable ability to recieve ETH
-    receive() external payable {}
 }
